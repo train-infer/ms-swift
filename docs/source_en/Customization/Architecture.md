@@ -85,6 +85,8 @@ The `get_loss_scale` function returns a Tuple. The first return is a list of dec
 ```
 In the example, we place more emphasis on the words "数学" and "重要" because their loss_scale is 2.0.
 
+For continuous weights based on the original Agent roles, use `--loss_scale role --role_loss_config role_loss_config.json`. The role strategy reads `loss_scale` from `system`, `user`, `assistant`, `tool_call`, and `tool_response` messages. The config can additionally set relative weights for assistant think tags, think content, and answers. It follows the existing `LossScale` convention of splitting text and assigning weights before tokenization; empty think blocks and multimodal input tokens retain the framework's default masks.
+
 Of course, we also need to pay attention to the core logic of the `__call__` method, namely the influence of the loss_scale base strategy (base_strategy) all/default/last_round on loss_scale. For details, refer to the introduction in the [Command-line Parameters Documentation](../Instruction/Command-line-parameters.md). Also, refer to the influence of the 'loss' field in the dataset on loss_scale in the [Custom Dataset Documentation](../Customization/Custom-dataset.md).
 
 ```python

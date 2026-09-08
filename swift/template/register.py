@@ -68,6 +68,7 @@ def get_template(
     # train
     padding_free: bool = False,
     loss_scale: str = 'default',
+    role_loss_config: Optional[str] = None,
     is_binary_loss_scale: Optional[bool] = None,
     sequence_parallel_size: int = 1,
     # infer/deploy
@@ -139,6 +140,7 @@ def get_template(
         loss_scale (str, optional): Loss scaling strategy identifier for different parts
             of sequences. Controls the contribution value of tokens to the loss.
             Defaults to 'default'.
+        role_loss_config (str, optional): role策略使用的JSON配置文件路径。
         is_binary_loss_scale (bool, optional): When `loss_scale` can only take values of `0` or `1`,
             its semantics can be represented by `labels` instead — by setting the `labels` of
             positions where `loss_scale` is `0` to `-100`, thereby ensuring compatibility with
@@ -203,6 +205,7 @@ def get_template(
         # train
         padding_free=padding_free,
         loss_scale=loss_scale,
+        role_loss_config=role_loss_config,
         is_binary_loss_scale=is_binary_loss_scale,
         sequence_parallel_size=sequence_parallel_size,
         # infer/deploy

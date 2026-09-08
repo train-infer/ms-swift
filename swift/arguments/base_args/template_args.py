@@ -63,6 +63,7 @@ class TemplateArguments:
             Note: This requires `--attn_impl flash_attn` and `transformers>=4.44`. Compared to packing, padding_free
             has no preprocessing overhead, but packing offers faster training speeds and more stable memory usage.
         loss_scale (str): Loss weight configuration for training tokens. Default is `'default'`.
+            使用`role`并通过`role_loss_config`设置消息role及assistant思考/回答权重。
             loss_scale includes 3 basic strategies: 'default', 'last_round', 'all', and other strategies:
             'ignore_empty_think', 'ignore_think_prefix', and agent-specific ones: 'react', 'hermes', 'qwen',
             'agentflan', 'alpha_umi', etc.
@@ -138,6 +139,8 @@ class TemplateArguments:
     # train
     padding_free: bool = False
     loss_scale: str = 'default'
+    role_loss_config: Optional[str] = field(
+        default=None, metadata={'help': 'role loss_scale使用的JSON配置文件路径。'})
     sequence_parallel_size: int = 1
     is_binary_loss_scale: Optional[bool] = None
     # infer/deploy
@@ -166,6 +169,15 @@ class TemplateArguments:
             self.response_prefix = self.response_prefix.replace('\\n', '\n')
         if self.truncation_strategy is None:
             self.truncation_strategy = 'delete'
+        # role策略必须显式提供配置，并始终使用连续权重计算路径。
+        if self.loss_scale and self.loss_scale.split('+', 1)[0] == 'role':
+            if not self.role_loss_config:
+                raise ValueError('loss_scale以role开头时必须提供role_loss_config。')
+            if self.is_binary_loss_scale is True:
+                raise ValueError('role loss_scale使用连续权重，is_binary_loss_scale必须为false。')
+            self.role_loss_config = os.path.abspath(os.path.expanduser(self.role_loss_config))
+        elif self.role_loss_config is not None:
+            raise ValueError('仅当loss_scale以role开头时才能设置role_loss_config。')
         self._set_loss_scale()
 
     def _set_loss_scale(self):
@@ -195,6 +207,7 @@ class TemplateArguments:
             # train
             'padding_free': self.padding_free,
             'loss_scale': self.loss_scale,
+            'role_loss_config': self.role_loss_config,
             'is_binary_loss_scale': self.is_binary_loss_scale,
             'sequence_parallel_size': self.sequence_parallel_size,
             # infer/deploy

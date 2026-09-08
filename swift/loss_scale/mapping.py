@@ -2,6 +2,7 @@
 from .agent import AgentFlanLossScale, AlphaUmiLossScale, HermesLossScale, QwenLossScale, REACTLossScale
 from .base import ALL_BASE_STRATEGY, ConcatLossScale, LossScale
 from .other import IgnoreEmptyThinkLossScale, IgnoreThinkPrefixLossScale
+from .role import RoleLossScale, load_role_loss_config
 
 # Add your loss scale here, use --loss_scale xxx to train
 loss_scale_map = {
@@ -17,7 +18,7 @@ loss_scale_map = {
 }
 
 
-def get_loss_scale(loss_scale: str) -> LossScale:
+def get_loss_scale(loss_scale: str, role_loss_config: str = None) -> LossScale:
     """Factory function to create a loss scale object from a string specification.
 
     The loss_scale string supports the following formats (segments separated by '+'):
@@ -31,6 +32,7 @@ def get_loss_scale(loss_scale: str) -> LossScale:
 
     Args:
         loss_scale: String specifying the loss scale configuration.
+        role_loss_config: role策略使用的JSON配置文件路径。
 
     Returns:
         LossScale: An instance of the appropriate LossScale subclass. When multiple loss
@@ -43,6 +45,18 @@ def get_loss_scale(loss_scale: str) -> LossScale:
         >>> get_loss_scale('last_round+hermes+ignore_empty_think')  # chain hermes then ignore_empty_think
     """
     parts = loss_scale.split('+')
+    if parts[0] == 'role':
+        config = load_role_loss_config(role_loss_config)
+        # RoleLossScale在语义拆分前固定屏蔽空think；若对拆分后的片段再次应用正则，
+        # 非空思考块的</think>会被错误屏蔽。
+        modifier_names = [name for name in parts[1:] if name != 'ignore_empty_think']
+        unsupported = set(modifier_names) - {'hermes'}
+        if unsupported:
+            raise ValueError(f'role loss_scale不支持以下modifier：{sorted(unsupported)}')
+        modifiers = [loss_scale_map[name]('default') for name in modifier_names]
+        return RoleLossScale(config, modifiers)
+    if role_loss_config is not None:
+        raise ValueError('仅当loss_scale以role开头时才能设置role_loss_config。')
     if parts[0] in ALL_BASE_STRATEGY:
         base_strategy = parts[0]
         ls_names = parts[1:] or ['base']
