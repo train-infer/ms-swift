@@ -103,13 +103,19 @@ class StdTemplateInputs:
         # Dataset loading performs the same conversion, but Template.encode also
         # accepts dictionaries directly and must not require a placeholder content.
         messages = normalize_openai_tool_calls(inputs['messages'])
+        # 在角色归一化前记录来源，保证Agent消息合并后仍可追溯权重。
+        for message in messages:
+            message['_source_role'] = message['role']
         tools = inputs.get('tools')
         objects = inputs.get('objects') or {}
         chat_template_kwargs = inputs.get('chat_template_kwargs') or {}
 
+        # system会从messages中移出，因此需在此保留其权重。
+        system_loss_scale = None
         if messages and messages[0]['role'] == 'system':
             message = messages.pop(0)
             system = message['content']
+            system_loss_scale = message.get('loss_scale')
         else:
             system = None
 
@@ -135,6 +141,8 @@ class StdTemplateInputs:
 
         all_keys = set(f.name for f in fields(StdTemplateInputs))
         extra_kwargs = {k: v for k, v in inputs.items() if k not in all_keys}
+        if system_loss_scale is not None:
+            extra_kwargs['system_loss_scale'] = system_loss_scale
         return cls(
             messages=messages,
             system=system,

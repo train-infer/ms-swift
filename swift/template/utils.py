@@ -32,7 +32,11 @@ def get_token_backed_response_ids(response: Any) -> Optional[List[int]]:
 
 class ContextType:
     RESPONSE = 'response'
+    # role策略通过显式类型区分历史响应结束符、系统内容和查询内容。
+    RESPONSE_SUFFIX = 'response_suffix'
     SUFFIX = 'suffix'
+    SYSTEM = 'system'
+    QUERY = 'query'
     OTHER = 'other'
 
 

@@ -95,6 +95,7 @@ class Template(ProcessorMixin):
         # only for train
         padding_free: bool = False,
         loss_scale: str = 'default',
+        role_loss_config: Optional[str] = None,
         is_binary_loss_scale: Optional[bool] = None,
         sequence_parallel_size: int = 1,
         # infer/deploy
@@ -113,9 +114,10 @@ class Template(ProcessorMixin):
             e.g. 512 * 512 (H*W)
         padding_side: The padding_side when the training batch_size >= 2
         loss_scale: The loss scale function to use
+        role_loss_config: role策略使用的JSON配置文件路径
         """
         self._processor_inited = False
-        self._version = 'v6'  # Avoid compatibility issues caused by load_from_cache_file caching.
+        self._version = 'v7'  # 模板语义变化时提升版本，避免复用旧预处理缓存。
         self.max_length = max_length
         self.model = None
         self.dummy_model = None
@@ -144,6 +146,10 @@ class Template(ProcessorMixin):
         self._loss_scale_cache = {}
         self._agent_template_cache = {}
         self._loss_scale = loss_scale
+        self.role_loss_config = role_loss_config
+        # role策略包含连续权重，不能降级为仅使用labels表达的二值模式。
+        if loss_scale and loss_scale.split('+', 1)[0] == 'role' and is_binary_loss_scale is True:
+            raise ValueError('role loss_scale使用连续权重，is_binary_loss_scale必须为false。')
         self.is_binary_loss_scale = is_binary_loss_scale
         self.max_pixels = max_pixels
         self.padding_side = padding_side
@@ -205,9 +211,11 @@ class Template(ProcessorMixin):
     @property
     def loss_scale(self):
         from swift.loss_scale import get_loss_scale
-        if self._loss_scale not in self._loss_scale_cache:
-            self._loss_scale_cache[self._loss_scale] = get_loss_scale(self._loss_scale)
-        return self._loss_scale_cache[self._loss_scale]
+        # 配置路径参与缓存键，避免同一策略复用其他实验的权重配置。
+        cache_key = (self._loss_scale, self.role_loss_config)
+        if cache_key not in self._loss_scale_cache:
+            self._loss_scale_cache[cache_key] = get_loss_scale(self._loss_scale, self.role_loss_config)
+        return self._loss_scale_cache[cache_key]
 
     @property
     def agent_template(self):
@@ -356,12 +364,14 @@ class Template(ProcessorMixin):
                 tool_content = agent_template._format_tool_calls(tool_call_msgs)
                 pre_message = messages[i_start - 1] if i_start > 0 else None
                 tool_content = agent_template._add_tool_call_prefix(tool_content, pre_message)
-                merged_message = {'role': 'assistant', 'content': tool_content}
-                # Preserve loss/loss_scale fields from the first tool_call message.
-                for msg in tool_call_msgs:
-                    for key in ['loss', 'loss_scale']:
-                        if key in msg and key not in merged_message:
-                            merged_message[key] = msg[key]
+                merged_message = {'role': 'assistant', 'content': tool_content, '_source_role': 'tool_call'}
+                # role级策略要求并行工具调用使用同一权重，避免静默保留首个值。
+                for key in ['loss', 'loss_scale']:
+                    values = [msg.get(key) for msg in tool_call_msgs if msg.get(key) is not None]
+                    if values and any(value != values[0] for value in values[1:]):
+                        raise ValueError(f'并行tool_call消息必须使用相同的{key}：{values}')
+                    if values:
+                        merged_message[key] = values[0]
                 messages[i_start:i + 1] = [merged_message]
                 i = i_start + 1
             else:
@@ -889,8 +899,9 @@ class Template(ProcessorMixin):
             system: Optional[str] = None,
             query: Optional[str] = None,
             response: Optional[str] = None,
-            round0: Optional[int] = None) -> None:
-        """Concat context list and replace placeholder"""
+            round0: Optional[int] = None,
+            default_context_type: ContextType = ContextType.OTHER) -> None:
+        """拼接模板上下文，并保留system/query占位符对应的内容边界。"""
         round1 = None
         if round0 is not None:
             round1 = str(round0 + 1)
@@ -902,16 +913,34 @@ class Template(ProcessorMixin):
                     res_context_list.append(response)
                     res_context_type.append(ContextType.RESPONSE)
                     continue
-                old_str_list = ['{{SYSTEM}}', '{{QUERY}}', '{{ROUND0}}', '{{ROUND1}}']
-                new_str_list = [system, query, round0, round1]
-                for (old_str, new_str) in zip(old_str_list, new_str_list):
-                    if new_str is not None and old_str in context:
-                        assert isinstance(new_str, str), f'new_str: {new_str}'
-                        context = context.replace(old_str, new_str)
+                # 轮次占位符不携带role语义，可先直接替换。
+                for placeholder, value in [('{{ROUND0}}', round0), ('{{ROUND1}}', round1)]:
+                    if value is not None and placeholder in context:
+                        context = context.replace(placeholder, value)
+                # system/query仅给真实内容赋类型，前后模板字符继续归入默认类型。
+                parts = re.split(r'(\{\{SYSTEM\}\}|\{\{QUERY\}\})', context)
+                if len(parts) > 1:
+                    values = {
+                        '{{SYSTEM}}': (system, ContextType.SYSTEM),
+                        '{{QUERY}}': (query, ContextType.QUERY),
+                    }
+                    for part in parts:
+                        if not part:
+                            continue
+                        if part in values and values[part][0] is not None:
+                            value, context_type = values[part]
+                            assert isinstance(value, str), f'value: {value}'
+                            if value:
+                                res_context_list.append(value)
+                                res_context_type.append(context_type)
+                        else:
+                            res_context_list.append(part)
+                            res_context_type.append(default_context_type)
+                    continue
             if len(context) == 0:
                 continue
             res_context_list.append(context)
-            res_context_type.append(ContextType.OTHER)
+            res_context_type.append(default_context_type)
 
     def _simplify_context_list(self, context_list: List[Context], loss_scale_list: List[float],
                                inputs: StdTemplateInputs) -> Tuple[List[Context], List[float]]:
@@ -1330,15 +1359,24 @@ class Template(ProcessorMixin):
                 i_start = i
                 while i + 1 < len(messages) and messages[i + 1]['role'] == 'tool':
                     i += 1
+                # 工具返回会合并为一个模型query；合并前先校验并保留统一role权重。
+                tool_messages = messages[i_start:i + 1]
                 pre_message['content'], tool_content = self.agent_template._format_tool_responses(
-                    pre_content, messages[i_start:i + 1])
+                    pre_content, tool_messages)
+                scales = [msg.get('loss_scale') for msg in tool_messages if msg.get('loss_scale') is not None]
+                if scales and any(scale != scales[0] for scale in scales[1:]):
+                    raise ValueError(f'并行tool_response消息必须使用相同的loss_scale：{scales}')
                 # where tool_content is a List.
-                messages[i_start:i + 1] = [{'role': 'tool', 'content': tool_content}]
+                merged_tool = {'role': 'tool', 'content': tool_content, '_source_role': 'tool_response'}
+                if scales:
+                    merged_tool['loss_scale'] = scales[0]
+                messages[i_start:i + 1] = [merged_tool]
                 i = i_start + 1
             elif pre_role == 'assistant' and role == 'assistant' or pre_role == 'user' and role == 'user':
                 # Consecutive messages from the assistant/user role need to be merged to prevent errors.
                 if self.template_backend == 'swift' and pre_role == 'assistant':
-                    for key in ['content', 'loss', 'loss_scale']:
+                    # content、权重和来源role必须按相同片段顺序合并。
+                    for key in ['content', 'loss', 'loss_scale', '_source_role']:
                         pre_val = pre_message.get(key)
                         cur_val = message.get(key)
                         pre_message[key] = (pre_val if isinstance(pre_val, list) else [pre_val]) + \
@@ -1413,7 +1451,7 @@ class Template(ProcessorMixin):
                 context_list.append('{{RESPONSE}}')
                 if inputs.messages[2 * (i + 1)]['role'] != 'tool':
                     extra_context_list = template_meta.chat_sep
-                    extra_context_type = ContextType.OTHER
+                    extra_context_type = ContextType.RESPONSE_SUFFIX
             elif response is not None:
                 # It is the final round, and the response exists (during training).
                 context_list.append('{{RESPONSE}}')
@@ -1444,6 +1482,15 @@ class Template(ProcessorMixin):
                 # final round and during inference.
                 context_list.append(response_prefix)
 
+            if query_role == 'tool':
+                # 工具结果轮开头的chat separator属于上一条assistant响应。
+                separator_count = len(template_meta.chat_sep or [])
+                self._concat_context_list(
+                    context_list[:separator_count],
+                    res_context_list,
+                    res_context_types,
+                    default_context_type=ContextType.RESPONSE_SUFFIX)
+                context_list = context_list[separator_count:]
             self._concat_context_list(
                 context_list,
                 res_context_list,
@@ -1451,7 +1498,8 @@ class Template(ProcessorMixin):
                 query=query,
                 response=response,
                 system=system,
-                round0=i)
+                round0=i,
+                default_context_type=ContextType.QUERY if query_role == 'tool' else ContextType.OTHER)
             extra_context_list = self._remove_response_separator_overlap(response, extra_context_list)
             res_context_list += extra_context_list
             res_context_types += [extra_context_type] * len(extra_context_list)
@@ -1589,7 +1637,9 @@ class Template(ProcessorMixin):
         else:
             res_context_list, loss_scale_list = self._simplify_context_list(res_context_list, loss_scale_list, inputs)
             input_ids, labels, loss_scale = self._encode_context_list(res_context_list, loss_scale_list)
-        self._add_dynamic_eos(input_ids, labels, loss_scale, self._encode_context_list(self.template_meta.suffix)[0])
+        # role策略已显式标注历史assistant结束符，避免动态推断误伤正权重query。
+        if self.loss_scale.base_strategy != 'role':
+            self._add_dynamic_eos(input_ids, labels, loss_scale, self._encode_context_list(self.template_meta.suffix)[0])
 
         encoded['input_ids'] = input_ids
         encoded['labels'] = labels

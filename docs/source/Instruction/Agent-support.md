@@ -16,6 +16,7 @@ ms-swift 使用 agent-template 实现了Agent数据格式与模型的解耦：�
 - `{"role": "tool_response", ...}`也可以写成`{"role": "tool", ...}`，这两种写法是等价的。该部分也将根据`agent_template`自动转换格式。该部分在训练时将不进行损失的计算，角色类似于`{"role": "user", ...}`。
 - 该格式支持并行调用工具，例子参考第一条数据样本。多模态Agent数据样本中`<image>`标签数量应与"images"长度相同，其标签位置代表图像特征的插入位置。当然也支持其他模态，例如audios, videos。
 - 注意：您也可以手动将数据处理为role为system/user/assistant的messages格式。agent_template的作用是将其中的tools字段以及role为tool_call和tool_response的messages部分，自动映射为标准的role为system/user/assistant的messages格式。
+- 如需按原始Agent role设置连续权重，可使用`--loss_scale role --role_loss_config role_loss_config.json`，并为`system`、`user`、`assistant`、`tool_call`、`tool_response`消息写入`loss_scale`。Agent格式转换和消息合并后仍会保留各role的权重；assistant中的think标签、think内容和answer可在配置中设置相对权重。
 
 以下为上述两条数据样本由qwen2_5和qwen2_5_vl的template进行encode后的input_ids和labels，选择的agent_template为**hermes**：
 

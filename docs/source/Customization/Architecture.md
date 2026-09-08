@@ -83,6 +83,8 @@ class CustomLossScale(LossScale):
 ```
 例子中，我们更看重数学和重要两个词，因为其loss_scale为2.0。
 
+对于需要按Agent原始role控制连续权重的场景，可以使用`--loss_scale role --role_loss_config role_loss_config.json`。role策略读取`system`、`user`、`assistant`、`tool_call`、`tool_response`消息上的`loss_scale`，并允许在配置中进一步设置assistant的`think_tag`、`think_content`和`answer`相对权重。该实现仍遵循`LossScale`在tokenization前返回文本片段和权重的扩展方式；空think和多模态输入token继续由框架默认mask。
+
 
 当然我们也需要关注`__call__`方法的核心逻辑，即loss_scale基本策略（base_strategy）all/default/last_round 对loss_scale的影响，具体参考[命令行参数文档](../Instruction/Command-line-parameters.md)的介绍。以及数据集中的'loss'字段对loss_scale的影响，参考[自定义数据集文档](../Customization/Custom-dataset.md)。
 ```python
