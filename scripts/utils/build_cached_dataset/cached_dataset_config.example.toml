@@ -1,0 +1,53 @@
+model = "/path/to/model"
+ip_file = "/path/to/worker_ips.txt"
+
+[runtime]
+env_bin = "/path/to/conda/env/bin"
+ms_swift_repo = "/data_train/vectorchen/github/ms-swift"
+cuda_fallback_ld_path = "/usr/local/cuda/lib64"
+
+[dataset]
+base = "/path/to/datasets"
+files = [
+  "dataset_a/train.jsonl",
+  "dataset_b/train.jsonl",
+]
+
+[output]
+allowed_output_root = "/path/to/output-root"
+work_root = "/path/to/output-root/cached_dataset_work"
+raw_shards_dir = "/path/to/output-root/cached_dataset_work/raw_shards_256"
+cached_shards_dir = "/path/to/output-root/cached_dataset_work/cached_shards_256"
+final_out_dir = "/path/to/output-root/cached_dataset"
+log_dir = "/path/to/output-root/cached_dataset_logs"
+local_work_root = "/tmp/swift-cached-dataset"
+
+[build]
+total_shards = 256
+copy_parallel = 4
+save_num_proc = 64
+auto_merge = true
+stale_task_seconds = 1800
+heartbeat_seconds = 30
+progress_interval_seconds = 30
+max_worker_rounds = 3
+split_buffer_bytes = 4194304
+split_num_proc = 64
+split_chunk_bytes = 8589934592
+split_worker_buffer_bytes = 67108864
+merge_group_size = 64
+
+[export]
+template = "qwen3_5"
+agent_template = "qwen3_5"
+loss_scale = "role"
+role_loss_config = "./role_loss_config.example.json"
+materialize_role_weights = true
+max_length = 131072
+truncation_strategy = "right"
+dataset_num_proc = 64
+dataset_shuffle = true
+data_seed = 42
+split_dataset_ratio = 0.0
+load_from_cache_file = true
+to_cached_dataset = true
