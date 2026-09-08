@@ -1,0 +1,14 @@
+{
+  "role_weights": {
+    "system": 0.0,
+    "user": 0.2,
+    "assistant": 1.0,
+    "tool_call": 1.0,
+    "tool_response": 0.2
+  },
+  "assistant_weights": {
+    "think_tag": 1.0,
+    "think_content": 0.5,
+    "answer": 1.0
+  }
+}
