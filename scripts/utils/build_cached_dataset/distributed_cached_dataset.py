@@ -337,11 +337,14 @@ class BuildConfig:
     def runtime_env_for_worker(self) -> Dict[str, str]:
         """生成远端 worker 运行时环境变量。"""
         pythonpath = os.environ.get("PYTHONPATH", "")
+        ld_library_path = os.environ.get("LD_LIBRARY_PATH", "")
         keys = {
             "RUN_ID": self.run_id,
             "LOG_DIR": str(self.log_dir),
             "MS_SWIFT_REPO": str(self.ms_swift_repo),
             "PYTHONPATH": str(self.ms_swift_repo) + (os.pathsep + pythonpath if pythonpath else ""),
+            "LD_LIBRARY_PATH": self.cuda_fallback_ld_path
+            + (os.pathsep + ld_library_path if ld_library_path else ""),
         }
         if self.role_loss_config is not None:
             keys["ROLE_LOSS_CONFIG"] = str(self.role_loss_config)
