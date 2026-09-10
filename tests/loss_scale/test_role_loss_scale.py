@@ -51,6 +51,7 @@ def test_inject_role_loss_scale_jsonl(tmp_path):
     config_path = _write_config(tmp_path)
     source = tmp_path / 'input.jsonl'
     output = tmp_path / 'output.jsonl'
+    roles = [*CONFIG['role_weights'], 'tool']
     row = {
         'tools': '[]',
         'messages': [{
@@ -58,15 +59,18 @@ def test_inject_role_loss_scale_jsonl(tmp_path):
             'content': '',
             'reasoning_content': '',
             'tool_call_id': '',
-        } for role in CONFIG['role_weights']]
+        } for role in roles]
     }
     source.write_text(json.dumps(row) + '\n', encoding='utf-8')
 
     summary = inject_role_loss_scale_jsonl(str(source), config_path, str(output))
     result = json.loads(output.read_text(encoding='utf-8'))
 
+    expected_weights = [*CONFIG['role_weights'].values(), CONFIG['role_weights']['tool_response']]
     assert summary['lines'] == 1
-    assert [message['loss_scale'] for message in result['messages']] == list(CONFIG['role_weights'].values())
+    assert summary['roles']['tool_response'] == 2
+    assert [message['role'] for message in result['messages']] == roles
+    assert [message['loss_scale'] for message in result['messages']] == expected_weights
     assert all(message['reasoning_content'] == '' and message['tool_call_id'] == ''
                for message in result['messages'])
 

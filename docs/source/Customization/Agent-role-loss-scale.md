@@ -15,13 +15,16 @@ Agent Role Loss Scale 为标准 Agent JSONL 提供一套共享配置的连续权
 - `scripts/utils/inject_role_loss_scale.py` 只调用上述实现提供的注入函数，将五种 role 的基础权重物化到 JSONL message。
 - `scripts/utils/build_cached_dataset/distributed_cached_dataset.py` 只负责数据分片、多机调度、本地权重物化、调用当前仓库的 `swift export`、复制和合并，不重复实现任何 loss 计算规则。
 
-支持以下原始 role：
+权重配置使用以下五个语义类别：
 
 - `system`
 - `user`
 - `assistant`
 - `tool_call`
 - `tool_response`
+
+原始 Agent JSONL 的工具返回 role 可以是 `tool_response` 或官方等价别名 `tool`；两者都使用
+`role_weights.tool_response`，注入时保留原始 role 不变。
 
 空 think、模板控制 token、padding、多模态输入 token 和 assistant EOS 继续遵循 ms-swift 原有 SFT 规则。
 

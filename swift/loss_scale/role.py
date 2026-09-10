@@ -102,13 +102,14 @@ def inject_role_loss_scale_jsonl(input_path: str, config_path: str, output_path:
                     for message in messages:
                         if not isinstance(message, dict):
                             raise TypeError('messages中的每一项必须是JSON对象。')
-                        role = message.get('role')
-                        if role not in config.role_weights:
-                            raise ValueError(f'不支持的消息role：{role!r}。')
+                        source_role = message.get('role')
+                        weight_role = 'tool_response' if source_role == 'tool' else source_role
+                        if weight_role not in config.role_weights:
+                            raise ValueError(f'不支持的消息role：{source_role!r}。')
                         if 'loss_scale' in message and not overwrite:
                             raise ValueError('message已包含loss_scale；如需替换请启用overwrite。')
-                        message['loss_scale'] = config.role_weights[role]
-                        role_counts[role] += 1
+                        message['loss_scale'] = config.role_weights[weight_role]
+                        role_counts[weight_role] += 1
                 except Exception as e:
                     raise ValueError(f'处理JSONL第{line_no}行失败：{e}') from e
                 dst.write(json.dumps(row, ensure_ascii=False, separators=(',', ':')) + '\n')
