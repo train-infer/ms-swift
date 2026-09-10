@@ -1,0 +1,54 @@
+# Phase 1 / SFT0-DEFAULT · 使用Role等价配置复现官方output-only SFT基线
+# 已在标准Agent轨迹上验证与default+ignore_empty_think的input_ids、labels及有效权重逐token一致。
+# CONFIG=./cached_dataset_config_d64_sft0_default.toml ./run_distributed_build.sh
+
+model = "/data_train/train/qwen/models/Qwen3.5-35B-A3B"
+ip_file = "/data_train/train/qwen/main-queue.txt"
+
+[runtime]
+env_bin = "/data_train/vectorchen/env/swift-202609/swift-train-202609/bin"
+ms_swift_repo = "/data_train/vectorchen/github/ms-swift"
+cuda_fallback_ld_path = "/data_train/vectorchen/env/swift-202609/swift-train-202609/lib/python3.12/site-packages/nvidia/cudnn/lib:/usr/local/cuda/lib64"
+
+[dataset]
+base = "/data_train/vectorchen/echo_experiments/agent_role_loss_scale_sft_sweep_v1_20260909/datasets"
+files = ["sample_64k_5b_tokens.jsonl"]
+
+[output]
+allowed_output_root = "/data_train/vectorchen/echo_experiments/agent_role_loss_scale_sft_sweep_v1_20260909"
+work_root = "/data_train/vectorchen/echo_experiments/agent_role_loss_scale_sft_sweep_v1_20260909/cached_dataset/d64_sft0_default_work"
+raw_shards_dir = "/data_train/vectorchen/echo_experiments/agent_role_loss_scale_sft_sweep_v1_20260909/cached_dataset/d64_sft0_default_work/raw_shards_64"
+cached_shards_dir = "/data_train/vectorchen/echo_experiments/agent_role_loss_scale_sft_sweep_v1_20260909/cached_dataset/d64_sft0_default_work/cached_shards_64"
+final_out_dir = "/data_train/vectorchen/echo_experiments/agent_role_loss_scale_sft_sweep_v1_20260909/cached_dataset/d64_cached_sft0_default"
+log_dir = "/data_train/vectorchen/echo_experiments/agent_role_loss_scale_sft_sweep_v1_20260909/cached_dataset/d64_sft0_default_work/logs"
+local_work_root = "/tmp/swcd-d64-s0"
+
+[build]
+total_shards = 64
+copy_parallel = 4
+save_num_proc = 64
+auto_merge = true
+stale_task_seconds = 1800
+heartbeat_seconds = 30
+progress_interval_seconds = 30
+max_worker_rounds = 3
+split_buffer_bytes = 4194304
+split_num_proc = 32
+split_chunk_bytes = 8589934592
+split_worker_buffer_bytes = 67108864
+merge_group_size = 64
+
+[export]
+template = "qwen3_5"
+agent_template = "qwen3_5"
+loss_scale = "role"
+role_loss_config = "./role_loss_config_sft0_equiv.json"
+materialize_role_weights = true
+max_length = 65536
+truncation_strategy = "right"
+dataset_num_proc = 64
+dataset_shuffle = true
+data_seed = 20260909
+split_dataset_ratio = 0.0
+load_from_cache_file = true
+to_cached_dataset = true
