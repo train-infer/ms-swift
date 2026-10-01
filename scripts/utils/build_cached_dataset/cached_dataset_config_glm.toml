@@ -1,7 +1,7 @@
 # GLM-5.3-Flash mid-train · role loss_scale 构建配置
 
 model = "/data_train/train/glm/models/GLM-5.3-Flash"
-ip_file = "/data_train/train/glm/main-queue-node32-glm53-midtrain.txt"
+ip_file = "/data_train/train/qwen/main-queue.txt"
 
 [runtime]
 env_bin = "/data_train/train/glm/envs/mid-prod/bin"
