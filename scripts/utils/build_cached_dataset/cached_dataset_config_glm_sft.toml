@@ -1,0 +1,51 @@
+# GLM-5.3-Flash SFT · v6.17_mix_swe_atom，保留原始消息级 loss=0/1。
+
+model = "/data_train/train/glm/models/GLM-5.3-Flash"
+ip_file = "/data_train/train/qwen/main-queue.txt"
+
+[runtime]
+env_bin = "/data_train/train/glm/envs/mid-prod/bin"
+ms_swift_repo = "/data_train/vectorchen/github/ms-swift"
+cuda_fallback_ld_path = "/data_train/train/glm/envs/mid-prod/lib/python3.12/site-packages/nvidia/cudnn/lib:/usr/local/cuda/lib64"
+
+[dataset]
+base = "/data_train/echo_experiments/agent/base_augmentation/kyrieguan/006_agent_behavior_pattern/v6/dataset/exp_data/v6.17_mix_swe_atom"
+files = ["train.jsonl"]
+
+[output]
+allowed_output_root = "/data_train/vectorchen/echo_experiments/glm5_3_flash_sft_v6_17_mix_swe_atom_20261009"
+work_root = "/data_train/vectorchen/echo_experiments/glm5_3_flash_sft_v6_17_mix_swe_atom_20261009/cached_dataset/work"
+raw_shards_dir = "/data_train/vectorchen/echo_experiments/glm5_3_flash_sft_v6_17_mix_swe_atom_20261009/cached_dataset/work/raw_shards_64"
+cached_shards_dir = "/data_train/vectorchen/echo_experiments/glm5_3_flash_sft_v6_17_mix_swe_atom_20261009/cached_dataset/work/cached_shards_64"
+final_out_dir = "/data_train/vectorchen/echo_experiments/glm5_3_flash_sft_v6_17_mix_swe_atom_20261009/cached_dataset/glm53_sft"
+log_dir = "/data_train/vectorchen/echo_experiments/glm5_3_flash_sft_v6_17_mix_swe_atom_20261009/cached_dataset/work/logs"
+local_work_root = "/tmp/vcd-glm53-sft"
+
+[build]
+total_shards = 64
+copy_parallel = 4
+save_num_proc = 64
+auto_merge = true
+stale_task_seconds = 1800
+heartbeat_seconds = 30
+progress_interval_seconds = 30
+max_worker_rounds = 3
+split_buffer_bytes = 4194304
+split_num_proc = 32
+split_chunk_bytes = 8589934592
+split_worker_buffer_bytes = 67108864
+merge_group_size = 64
+
+[export]
+template = "glm5_next"
+agent_template = "glm5_1"
+loss_scale = "default+ignore_empty_think"
+materialize_role_weights = false
+max_length = 131072
+truncation_strategy = "right"
+dataset_num_proc = 64
+dataset_shuffle = true
+data_seed = 20260909
+split_dataset_ratio = 0.0
+load_from_cache_file = true
+to_cached_dataset = true
